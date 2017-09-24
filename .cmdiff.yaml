@@ -1,0 +1,13 @@
+# cmdiff default configuration file
+#
+# configuration file version
+version: 1
+#
+# logging configuration
+#
+# for available options see: https://github.com/gogap/logrus_mate
+#
+# log level
+level: debug
+# log output formatter
+formatter.name: text
