@@ -11,3 +11,54 @@ version: 1
 level: debug
 # log output formatter
 formatter.name: text
+#
+################################################################################
+#
+#  Filewalker module - collect (local) file list into current session
+#
+filewalker:
+#
+# enable the filewalker module
+#
+  enable: true
+#
+# The pattern syntax is:
+#   pattern:
+#       { term }
+#
+#   term:
+#       `*`         matches any sequence of non-separator characters
+#       `**`        matches any sequence of characters
+#       `?`         matches any single non-separator character
+#       `[` [ `!` ] { character-range } `]`
+#                   character class (must be non-empty)
+#       `{` pattern-list `}`
+#                   pattern alternatives
+#       c           matches character c (c != `*`, `**`, `?`, `\`, `[`, `{`, `}`)
+#       `\` c       matches character c
+#
+#   character-range:
+#       c           matches character c (c != `\\`, `-`, `]`)
+#       `\` c       matches character c
+#       lo `-` hi   matches character c for lo <= c <= hi
+#
+#   pattern-list:
+#       pattern { `,` pattern }
+#                   comma-separated (without spaces) patterns
+#
+# include files matching patterns (array of glob patterns)
+  include:
+    - '/opt/**conf**'
+    - '/etc/**'
+    - '/bin/**'
+    - '/sbin/**'
+    - '/usr/bin/**'
+    - '/usr/sbin/**'
+#
+# exclude files from list defined by the "include" directive (array of glob patterns)
+  exclude:
+    - '/etc/mtab'
+    - '/etc/ld.so.cache'
+    - '/etc/printcap'
+    - '**.bak'
+    - '**~'

@@ -27,6 +27,7 @@ import (
 	"github.com/heirko/go-contrib/logrusHelper"
 	_ "github.com/heralight/logrus_mate/hooks/file"
 
+	"github.com/mcree/cmdiff/util"
 )
 
 var cfgFile string
@@ -118,4 +119,6 @@ func initConfig() {
 	logrusHelper.SetConfig(log.StandardLogger(), c) // for e.g. apply it to logrus default instance
 
 	log.Debug(c)
+
+	util.Filewalker()
 }
