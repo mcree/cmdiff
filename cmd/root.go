@@ -120,5 +120,6 @@ func initConfig() {
 
 	log.Debug(c)
 
-	util.Filewalker()
+	fw := util.NewFilewalker()
+	fw.Collect(util.NewSession())
 }
