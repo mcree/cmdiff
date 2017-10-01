@@ -13,17 +13,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-package util
+package session
 
 import (
 	log "github.com/sirupsen/logrus"
-	glob "github.com/gobwas/glob"
 	"github.com/gobwas/glob/syntax/lexer"
 	"os"
 	"bytes"
 	"path/filepath"
 	"github.com/spf13/viper"
 	"github.com/mcree/cmdiff/set"
+	"net/url"
 )
 
 // calculates longest non-wildcard prefix for a path
@@ -55,53 +55,43 @@ func FindRoot(path string) (root string) {
 }
 
 type Filewalker struct {
-	includeGlobs []glob.Glob
-	excludeGlobs []glob.Glob
 	includeRoots []string
+	items chan *SessionItem
+	incex *IncEx
 }
 
-// determines if the given path would be allowed by include and exclude rules
-func (fw *Filewalker) Includes(path string) (bool) {
-	included := false
-	// check include rules
-	for _, i := range fw.includeGlobs {
-		if i.Match(path) {
-			included = true
-			break
-		}
-	}
-	if !included {
-		return false
-	}
-
-	// check exclude rules
-	excluded := false
-	for _, e := range fw.excludeGlobs {
-		if e.Match(path) {
-			excluded = true
-			break
-		}
-	}
-	return !excluded
-}
-
-// collect file items into session
-func (fw *Filewalker) Collect(sess *Session) {
+// collect file Items into session
+func (fw *Filewalker) Generate() {
+	log.Info("Filewalker Generate start")
+	defer close(fw.items)
 	for _, root := range fw.includeRoots {
 		err := filepath.Walk(root,  func(path string, info os.FileInfo, err error) error {
 			if info.IsDir() {
 				return nil
 			}
-			if fw.Includes(path) {
-
-				log.Debug("Filewalker collected: ", path, " ", info, " ", err)
+			if fw.incex.Includes(path) {
+				var id url.URL
+				id.Scheme = "file"
+				id.Path = path
+				item := NewSessionItemMap(id, map[string]interface{} {
+					"size": uint64(info.Size()),
+					"modTime": info.ModTime(),
+					"mode": info.Mode(),
+				})
+				if err != nil {
+					item.SetAttr("filewalker.error", err)
+					log.Warn("Filewalker: ", err)
+				}
+				log.Debug("Filewalker collected: ", item)
+				fw.items <- item
 			}
 			return nil
 		})
 		if err != nil {
-			log.Fatal("walk error: ", err)
+			log.Fatal("Filewalker walk: ", err)
 		}
 	}
+	log.Info("Filewalker Generate done")
 }
 
 // collect (local) file list into current session based on configuration
@@ -110,36 +100,41 @@ func NewFilewalker() (*Filewalker) {
 
 	fw := new(Filewalker)
 
-	// process include directives
+	fw.items = make(chan *SessionItem, 10)
+
 	include := viper.GetStringSlice("filewalker.include")
+	exclude := viper.GetStringSlice("filewalker.exclude")
+
+	fw.incex = NewIncEx(include, exclude)
+
+	// process include directives
 	log.Debug("Include: ", include)
 	includeRoot := set.New()
 
 	for _, i := range include {
 		includeRoot.Add(FindRoot(i))
-		gl, err := glob.Compile(i,os.PathSeparator)
-		if err != nil {
-			log.Fatal("error compiling glob path: ",i," err:",err)
-		}
-		fw.includeGlobs = append(fw.includeGlobs, gl)
 	}
 	fw.includeRoots = includeRoot.StringItems()
 	log.Debug("roots: ", fw.includeRoots)
 
-	// process exclude directives
-	exclude := viper.GetStringSlice("filewalker.exclude")
-	log.Debug("Exclude: ", exclude)
-	for _, e := range exclude {
-		gl, err := glob.Compile(e,os.PathSeparator)
-		if err != nil {
-			log.Fatal("error compiling glob path: ",e," err:",err)
-		}
-		fw.excludeGlobs = append(fw.excludeGlobs, gl)
-	}
-
-	log.Debug(fw.excludeGlobs)
 
 	log.Info("Filewalker init done.")
 
 	return fw
+}
+
+func (fw *Filewalker) Name() string {
+	return "Filewalker"
+}
+
+func  (fw *Filewalker) Next() interface{} {
+	item, ok := <- fw.items
+	if ok {
+		return item
+	}
+	return nil
+}
+
+func  (fw *Filewalker) Abort() {
+	log.Info("Filewalker abort in progress.")
 }

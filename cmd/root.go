@@ -27,7 +27,7 @@ import (
 	"github.com/heirko/go-contrib/logrusHelper"
 	_ "github.com/heralight/logrus_mate/hooks/file"
 
-	"github.com/mcree/cmdiff/util"
+	"github.com/mcree/cmdiff/session"
 )
 
 var cfgFile string
@@ -120,6 +120,6 @@ func initConfig() {
 
 	log.Debug(c)
 
-	fw := util.NewFilewalker()
-	fw.Collect(util.NewSession())
+	session.NewPipeline().Run()
+
 }

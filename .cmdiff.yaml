@@ -18,10 +18,6 @@ formatter.name: text
 #
 filewalker:
 #
-# enable the filewalker module
-#
-  enable: true
-#
 # The pattern syntax is:
 #   pattern:
 #       { term }
@@ -62,3 +58,16 @@ filewalker:
     - '/etc/printcap'
     - '**.bak'
     - '**~'
+#
+# FileContentLoader module - optionally loads content of files collected by filewalker for detailed reporting
+#
+filecontentloader:
+  # size limit in bytes - loaded files must fit in memory
+  # allowed size multipliers: k - kilobytes, m - megabytes, g - gigbabytes - see https://github.com/cloudfoundry/bytefmt
+  sizeLimit: 512k
+  include:
+   - '/etc/**'
+   - '**.{co?nf,xml,ya?ml,txt}'
+  exclude:
+   - '/etc/g?shadow*'
+   - '**.{secret,key}'
