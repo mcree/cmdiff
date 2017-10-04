@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"github.com/satori/go.uuid"
 )
 
 type SessionItem struct {
@@ -79,11 +80,14 @@ func (item *SessionItem) HasAttr(key string) (bool) {
 }
 
 type Session struct {
+	UUID uuid.UUID `json:uuid`
 	Items []*SessionItem `json:"items"`
 }
 
 func NewSession() (*Session) {
-	return new(Session)
+	sess := new(Session)
+	sess.UUID = uuid.NewV2(0x01)
+	return sess
 }
 
 func (sess *Session) AddItem(item *SessionItem) {

@@ -71,3 +71,8 @@ filecontentloader:
   exclude:
    - '/etc/g?shadow*'
    - '**.{secret,key}'
+#
+# Database options
+#
+db:
+  basepath: ~/.cmdiff.db
