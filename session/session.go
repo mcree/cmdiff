@@ -20,6 +20,7 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/satori/go.uuid"
+	"time"
 )
 
 type SessionItem struct {
@@ -79,19 +80,27 @@ func (item *SessionItem) HasAttr(key string) (bool) {
 	return ok
 }
 
+type SessionMeta struct {
+	UUID uuid.UUID `json:"uuid"`
+	Time time.Time `json:"time"`
+	Items int64
+}
+
 type Session struct {
-	UUID uuid.UUID `json:uuid`
+	Meta SessionMeta `json:"meta"`
 	Items []*SessionItem `json:"items"`
 }
 
 func NewSession() (*Session) {
 	sess := new(Session)
-	sess.UUID = uuid.NewV2(0x01)
+	sess.Meta.UUID = uuid.NewV2(0x01)
+	sess.Meta.Time = time.Now()
 	return sess
 }
 
 func (sess *Session) AddItem(item *SessionItem) {
 	sess.Items = append(sess.Items, item)
+	sess.Meta.Items++
 }
 
 func (sess *Session) Name() string {

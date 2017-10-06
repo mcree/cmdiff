@@ -28,6 +28,7 @@ import (
 	_ "github.com/heralight/logrus_mate/hooks/file"
 
 	"github.com/mcree/cmdiff/session"
+	"github.com/mcree/cmdiff/db"
 )
 
 var cfgFile string
@@ -120,6 +121,8 @@ func initConfig() {
 
 	log.Debug(c)
 
-	session.NewPipeline().Run()
-
+	sess := session.NewPipeline().Run()
+	err := db.WriteSession(sess)
+	log.Debug("Write result: ", err)
+	db.DoHousekeeping()
 }

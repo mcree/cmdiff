@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+// Package db provides disk persistence functions
 package db
 
 import (
@@ -20,33 +21,154 @@ import (
 	"github.com/spf13/viper"
 	"github.com/mcree/cmdiff/session"
 	"encoding/json"
+	log "github.com/sirupsen/logrus"
+	"fmt"
+	"sync"
+	"sort"
 )
 
+// database internal singleton struct
 type dbStruct struct {
 	diskv *diskv.Diskv
+	index *Index
+}
+
+// index containing session metadata
+type SessionIndex []session.SessionMeta
+
+// database index
+type Index struct {
+	Sessions SessionIndex `json:"sessions"`
+}
+
+// helper for sort.Sort
+func (p SessionIndex) Len() int {
+	return len(p)
+}
+
+// helper for sort.Sort
+func (p SessionIndex) Less(i, j int) bool {
+	return p[i].Time.Before(p[j].Time)
+}
+
+// helper for sort.Sort
+func (p SessionIndex) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
 }
 
 // singleton instance
 var db *dbStruct
 
-// set up singleton instance if needed
+// lock for thread safety of public functions
+var lock sync.Mutex
+
+// internal method to set up singleton instance, also initializes index if needed
 func thawDB() {
 	if db == nil {
 		db = new(dbStruct)
 		db.diskv = diskv.New(diskv.Options{
 			 BasePath: viper.GetString("db.basepath"),
+			 //Compression: diskv.NewGzipCompression(),
 		})
+		log.Debug("opened database: ", db.diskv)
+		if db.diskv.Has("index") {
+			data, err := db.diskv.Read("index")
+			if err == nil {
+				db.index = new(Index)
+				err := json.Unmarshal(data, db.index)
+				if err != nil {
+					log.Fatal("error reading index: ", err)
+				}
+			} else {
+				log.Fatal("error reading index: ", err)
+			}
+		} else {
+			log.Warn("initializing empty database")
+			db.index = new(Index)
+			writeIndex()
+		}
 	}
 }
 
-func ReadSession(uuid string) (*session.Session) {
-	thawDB()
-	data, err := db.diskv.Read(uuid)
+// internal function for index persistence
+func writeIndex() {
+	data, err := json.Marshal(db.index)
+	if err == nil {
+		err = db.diskv.Write("index", data)
+	}
 	if err != nil {
+		log.Fatal("error updating index: ", err)
+	}
+}
+
+// get session from db by uuid
+func ReadSession(uuid string) (*session.Session, error) {
+	lock.Lock()
+	defer lock.Unlock()
+	thawDB()
+	key := fmt.Sprintf("session-%s", uuid)
+	data, err := db.diskv.Read(key)
+	if err == nil {
 		sess := new(session.Session)
-		json.Unmarshal(data, sess)
-		return sess
+		err := json.Unmarshal(data, sess)
+		return sess, err
 	} else {
-		return nil
+		return nil, err
+	}
+}
+
+// save session to db - also updates index with session metadata
+func WriteSession(sess *session.Session) (error) {
+	lock.Lock()
+	defer lock.Unlock()
+	thawDB()
+	data, err := json.Marshal(sess)
+	if err == nil {
+		key := fmt.Sprintf("session-%s", sess.Meta.UUID.String())
+		err := db.diskv.Write(key, data)
+		if err == nil {
+			db.index.Sessions = append(db.index.Sessions, sess.Meta)
+			writeIndex()
+		}
+		return err
+	} else {
+		return err
+	}
+}
+
+// erase session from db - also updates index by removing relevant session metadata
+func EraseSession(uuid string) (error) {
+	lock.Lock()
+	defer lock.Unlock()
+	thawDB()
+	key := fmt.Sprintf("session-%s", uuid)
+	err := db.diskv.Erase(key)
+	if err == nil {
+		//log.Debug("pre erase: ",db.index.Sessions)
+		for i, s := range db.index.Sessions {
+			//log.Debug("db.index.Sessions[",i,"] ", s)
+			if s.UUID.String() == uuid {
+				db.index.Sessions = append(db.index.Sessions[:i], db.index.Sessions[i+1:]...)
+			}
+		}
+		//log.Debug("post erase: ",db.index.Sessions)
+		writeIndex()
+	}
+	return err
+}
+
+// erase old database records
+// works based on configuration variables:
+//  db.maxSessions
+//  db.maxReports
+func DoHousekeeping() {
+	maxSessions := viper.GetInt("db.maxSessions")
+	numSessions := len(db.index.Sessions)
+	if numSessions > maxSessions {
+	sort.Sort(db.index.Sessions)
+		for _, s := range db.index.Sessions[:numSessions-maxSessions] {
+			log.Info("Housekeeping, removing session: ", s)
+			EraseSession(s.UUID.String())
+		}
 	}
 }

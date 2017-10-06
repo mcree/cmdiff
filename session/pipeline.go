@@ -17,8 +17,6 @@ package session
 import (
 	"github.com/jboelter/pipeline"
 	log "github.com/sirupsen/logrus"
-	"encoding/json"
-	"fmt"
 )
 
 type Pipeline struct {
@@ -30,7 +28,7 @@ func NewPipeline() (*Pipeline) {
 	return pl
 }
 
-func (pl *Pipeline) Run() {
+func (pl *Pipeline) Run() (*Session) {
 	log.Info("Pipeline start")
 
 	p := pipeline.New()
@@ -44,10 +42,7 @@ func (pl *Pipeline) Run() {
 	p.AddStage(NewHasher())
 	sess := NewSession()
 	p.AddStage(sess)
-
 	p.Run()
 	log.Info("Pipeline done.")
-	b, _ := json.MarshalIndent(sess,"", "  ")
-	fmt.Println(string(b))
-
+	return sess
 }

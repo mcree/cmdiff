@@ -75,4 +75,6 @@ filecontentloader:
 # Database options
 #
 db:
-  basepath: ~/.cmdiff.db
+  basepath: /var/tmp/cmdiff.db
+  maxSessions: 3
+
