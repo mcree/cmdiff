@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"sync"
 	"sort"
+	"errors"
 )
 
 // database internal singleton struct
@@ -171,4 +172,21 @@ func DoHousekeeping() {
 			EraseSession(s.UUID.String())
 		}
 	}
+}
+
+func NthSession(n int) (*session.Session, error) {
+	if len(db.index.Sessions) < n {
+		return nil, errors.New(fmt.Sprintf("%d. session requested, %d available", n, len(db.index.Sessions)))
+	}
+	sort.Sort(db.index.Sessions)
+	uuid := db.index.Sessions[n].UUID.String()
+	return ReadSession(uuid)
+}
+
+func CurrentSession () (*session.Session, error) {
+	return NthSession(0)
+}
+
+func PreviousSession () (*session.Session, error) {
+	return NthSession(1)
 }

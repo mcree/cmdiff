@@ -29,6 +29,7 @@ import (
 
 	"github.com/mcree/cmdiff/session"
 	"github.com/mcree/cmdiff/db"
+	"github.com/mcree/cmdiff/report"
 )
 
 var cfgFile string
@@ -125,4 +126,12 @@ func initConfig() {
 	err := db.WriteSession(sess)
 	log.Debug("Write result: ", err)
 	db.DoHousekeeping()
+
+	prev, err1 := db.PreviousSession()
+	curr, err2 := db.CurrentSession()
+
+	if err1 == nil && err2 == nil {
+		rep, _ := report.NewSessionDiff(prev, curr).StringTemplate(viper.GetString("report.template"))
+		fmt.Print(rep)
+	}
 }

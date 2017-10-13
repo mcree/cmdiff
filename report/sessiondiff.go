@@ -23,6 +23,8 @@ import (
 	"gopkg.in/fatih/set.v0"
 	log "github.com/sirupsen/logrus"
 	"encoding/json"
+	"github.com/spf13/viper"
+	"strings"
 )
 
 // record representing attribute and value differences between two SessionItems
@@ -41,8 +43,8 @@ type SessionItemDiff struct {
 // metadata of SessionDiff records - mainly for indexing purposes
 type SessionDiffMeta struct {
 	UUID       uuid.UUID `json:"uuid"`
-	OldSession uuid.UUID `json:"oldSessionUuid"`
-	NewSession uuid.UUID `json:"newSessionUuid"`
+	OldSession session.SessionMeta `json:"oldSession"`
+	NewSession session.SessionMeta `json:"newSession"`
 	Time       time.Time `json:"time"`
 	Changes    int       `json:"changes"`
 	ItemsLost  int       `json:"itemsLost"`
@@ -61,8 +63,8 @@ type SessionDiff struct {
 }
 
 func (diff *SessionDiff) String() (string) {
-	json, _ := json.MarshalIndent(diff, "", "  ")
-	return string(json)
+	j, _ := json.MarshalIndent(diff, "", "  ")
+	return string(j)
 }
 
 // extract set of urls from a session
@@ -110,15 +112,27 @@ func diffItems(oldItem *session.SessionItem, newItem *session.SessionItem) (Sess
 	}
 	diff.Id = newItem.Id
 
+	ignored := set.New()
+
 	oldAttrs := set.New()
-	for k, _ := range oldItem.Attrs {
-		oldAttrs.Add(k)
+	for k := range oldItem.Attrs {
+		if ! isIgnored(diff.Id, k) {
+			oldAttrs.Add(k)
+		} else {
+			ignored.Add(k)
+		}
 	}
 
 	newAttrs := set.New()
-	for k, _ := range newItem.Attrs {
-		newAttrs.Add(k)
+	for k := range newItem.Attrs {
+		if ! isIgnored(diff.Id, k) {
+			newAttrs.Add(k)
+		} else {
+			ignored.Add(k)
+		}
 	}
+
+	diff.Ignore = set.StringSlice(ignored)
 
 	set.Difference(oldAttrs, newAttrs).Each(func(lost interface{}) (bool) {
 		key := lost.(string)
@@ -136,6 +150,7 @@ func diffItems(oldItem *session.SessionItem, newItem *session.SessionItem) (Sess
 		key := found.(string)
 		oldVal := oldItem.Attrs[key]
 		newVal := newItem.Attrs[key]
+		log.Debug(key, ": ", oldVal, " ?== ", newVal)
 		if oldVal == newVal {
 			diff.Equal[key] = newVal
 		} else {
@@ -152,11 +167,42 @@ func diffItems(oldItem *session.SessionItem, newItem *session.SessionItem) (Sess
 	return diff
 }
 
+// include/exclude rules for diff.ignore.[attr]
+var ignoreRules map[string]*session.IncEx
+
+// process configuration for diff.ignore.[attr]
+func processIgnoreRules() {
+	ignoreRules = make(map[string]*session.IncEx)
+	v := viper.Sub("diff.ignore")
+	for _, key := range v.AllKeys() {
+		ex := v.GetStringSlice(key)
+		ie := session.NewIncEx(nil, ex)
+		//log.Info("ignore key: ", key, ":", ie)
+		ignoreRules[strings.ToLower(key)] = ie
+	}
+}
+
+// tests if given attr shall be ignored for the given url
+// based on diff.ignore.[attr] and Include/Exclude rules
+func isIgnored(url url.URL, attr string) (bool) {
+	key := strings.ToLower(attr)
+	rule, ok := ignoreRules[key]
+	if ok {
+		res := !rule.Includes(url.Path)
+		//log.Info(url.Path, "[",attr,"] isIgnored: ", res)
+		return res
+	} else {
+		return false
+	}
+}
+
 // calculate difference between two Sessions
 func NewSessionDiff(oldSession *session.Session, newSession *session.Session) (*SessionDiff) {
 	diff := new(SessionDiff)
 	diff.Meta.UUID = uuid.NewV1()
 	diff.Meta.Time = time.Now()
+	diff.Meta.OldSession = oldSession.Meta
+	diff.Meta.NewSession = newSession.Meta
 	oldUrls := urlSet(oldSession)
 	newUrls := urlSet(newSession)
 
@@ -164,6 +210,8 @@ func NewSessionDiff(oldSession *session.Session, newSession *session.Session) (*
 	diff.Meta.ItemsLost = len(diff.Lost)
 	diff.Found = getItems(newSession, set.Difference(newUrls, oldUrls).(*set.Set))
 	diff.Meta.ItemsFound = len(diff.Found)
+
+	processIgnoreRules()
 
 	commonUrls := set.Intersection(oldUrls, newUrls).(*set.Set)
 	commonUrls.Each(func(i interface{}) (bool) {

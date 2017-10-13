@@ -18,7 +18,7 @@ formatter.name: text
 #
 filewalker:
 #
-# The pattern syntax is:
+# The glob pattern syntax is:
 #   pattern:
 #       { term }
 #
@@ -72,9 +72,32 @@ filecontentloader:
    - '/etc/g?shadow*'
    - '**.{secret,key}'
 #
+# Diff ignore rules - diff.ignore.[attr] contains list of glob patterns
+# matching paths for which attr shall be ignored during diff
+#
+diff.ignore:
+  hasher.error:
+   - '**'
+  content.error:
+   - '**'
+  modTime:
+   - '/etc/cups/subscriptions.conf**'
+  stat.atime:
+   - '/etc/cups/subscriptions.conf**'
+  stat.ctime:
+   - '/etc/cups/subscriptions.conf**'
+#
 # Database options
 #
 db:
   basepath: /var/tmp/cmdiff.db
   maxSessions: 3
-
+#
+# Report options
+#
+report.template: |
+  Report {{ diff.Meta.Time.String }} ({{ diff.Meta.UUID.String }})
+  "Old" session: {{ diff.Meta.OldSession.Time.String }} ({{ diff.Meta.OldSession.UUID.String }})
+  "New" session:  {{ diff.Meta.NewSession.Time.String }} ({{ diff.Meta.NewSession.UUID.String }})
+  Items Lost: {{ diff.Meta.ItemsLost }} / Found: {{ diff.Meta.ItemsFound }} / Equal: {{ diff.Meta.ItemsEqual }} / Different: {{ diff.Meta.ItemsDiff }}
+  Total item changes: {{ diff.Meta.Changes }}
